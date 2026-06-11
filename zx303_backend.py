@@ -11,11 +11,14 @@ import threading
 import datetime
 import json
 import os
+import sys
 
 # ==================== CONFIG ====================
 TCP_HOST = "0.0.0.0"
-TCP_PORT = int(os.environ.get("TCP_PORT", 5001))
-FLASK_PORT = int(os.environ.get("PORT", 10000))
+TCP_PORT = int(os.environ.get("TCP_PORT", "5001"))
+FLASK_PORT = int(os.environ.get("PORT", "10000"))
+
+print(f"[CONFIG] TCP_PORT={TCP_PORT}, FLASK_PORT={FLASK_PORT}", file=sys.stderr)
 
 # ==================== DATA STORE ====================
 devices = {}
@@ -118,23 +121,26 @@ def store_event(imei, event, data):
     if event == "LOCATION":
         devices[imei]["latest"] = data
 
-    print(f"[STORED] IMEI:{imei} | {event} | {json.dumps(data)}")
+    print(f"[STORED] IMEI:{imei} | {event} | {json.dumps(data)}", file=sys.stderr)
 
 # ==================== TCP SERVER ====================
 
 def tcp_server():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((TCP_HOST, TCP_PORT))
-        s.listen(5)
-        print(f"[TCP] Listening on {TCP_HOST}:{TCP_PORT}")
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind((TCP_HOST, TCP_PORT))
+            s.listen(5)
+            print(f"[TCP] Listening on {TCP_HOST}:{TCP_PORT}", file=sys.stderr)
 
-        while True:
-            conn, addr = s.accept()
-            print(f"[TCP] Connection from {addr}")
-            handler = threading.Thread(target=handle_client, args=(conn, addr))
-            handler.daemon = True
-            handler.start()
+            while True:
+                conn, addr = s.accept()
+                print(f"[TCP] Connection from {addr}", file=sys.stderr)
+                handler = threading.Thread(target=handle_client, args=(conn, addr))
+                handler.daemon = True
+                handler.start()
+    except Exception as e:
+        print(f"[TCP ERROR] {e}", file=sys.stderr)
 
 def handle_client(conn, addr):
     current_imei = None
@@ -154,7 +160,7 @@ def handle_client(conn, addr):
                     "hex": chunk.hex()
                 })
 
-                print(f"[RAW TCP] {chunk.hex()}")
+                print(f"[RAW TCP] {chunk.hex()}", file=sys.stderr)
 
                 while len(buffer) >= 5:
                     header_idx = buffer.find(b'\x78\x78')
@@ -187,13 +193,13 @@ def handle_client(conn, addr):
                     if current_imei:
                         store_event(current_imei, event, data)
                     else:
-                        print(f"[PARSED] NO_IMEI | {event} | {json.dumps(data)}")
+                        print(f"[PARSED] NO_IMEI | {event} | {json.dumps(data)}", file=sys.stderr)
 
             except Exception as e:
-                print(f"[ERROR] {e}")
+                print(f"[ERROR] {e}", file=sys.stderr)
                 break
 
-    print(f"[TCP] Disconnected from {addr}")
+    print(f"[TCP] Disconnected from {addr}", file=sys.stderr)
 
 # ==================== FLASK APP ====================
 
@@ -343,5 +349,5 @@ if __name__ == "__main__":
     tcp_thread.daemon = True
     tcp_thread.start()
 
-    print(f"[FLASK] Starting on port {FLASK_PORT}")
+    print(f"[FLASK] Starting on port {FLASK_PORT}", file=sys.stderr)
     app.run(host="0.0.0.0", port=FLASK_PORT, debug=False)
